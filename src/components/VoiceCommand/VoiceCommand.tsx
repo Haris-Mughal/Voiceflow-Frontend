@@ -1,35 +1,49 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 interface VoiceCommandProps {
     onCommand: (command: string) => void;
+}
+
+declare global {
+    type SpeechRecognitionEvent = Event & {
+        results: SpeechRecognitionResultList;
+    };
+
+    interface ISpeechRecognition {
+        continuous: boolean;
+        lang: string;
+        onstart: (() => void) | null;
+        onend: (() => void) | null;
+        onresult: ((event: SpeechRecognitionEvent) => void) | null;
+        start(): void;
+        stop(): void;
+        abort(): void;
+    }
+
+    interface Window {
+        SpeechRecognition: new () => ISpeechRecognition;
+        webkitSpeechRecognition: new () => ISpeechRecognition;
+    }
 }
 
 const VoiceCommand: React.FC<VoiceCommandProps> = ({ onCommand }) => {
     const [isListening, setIsListening] = useState<boolean>(false);
     const [transcript, setTranscript] = useState<string>("");
 
-    type SpeechRecognitionEvent = Event & {
-        results: SpeechRecognitionResultList;
-    };
+    const handleCommand = useCallback(
+        (command: string) => {
+            setTranscript(command);
+            onCommand(command);
+        },
+        [onCommand]
+    );
 
     useEffect(() => {
         const SpeechRecognition =
-            (
-                window as unknown as {
-                    SpeechRecognition: typeof window.SpeechRecognition;
-                }
-            ).SpeechRecognition ||
-            (
-                window as unknown as {
-                    webkitSpeechRecognition: typeof window.SpeechRecognition;
-                }
-            ).webkitSpeechRecognition;
-
+            window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (!SpeechRecognition) {
-            console.error(
-                "Speech Recognition API not supported in this browser."
-            );
+            console.error("Speech Recognition API is not supported.");
             return;
         }
 
@@ -43,15 +57,14 @@ const VoiceCommand: React.FC<VoiceCommandProps> = ({ onCommand }) => {
         recognition.onresult = (event: SpeechRecognitionEvent) => {
             const lastTranscript =
                 event.results[event.results.length - 1][0].transcript;
-            setTranscript(lastTranscript);
-            onCommand(lastTranscript);
+            handleCommand(lastTranscript);
         };
 
         if (isListening) recognition.start();
         else recognition.stop();
 
         return () => recognition.abort();
-    }, [isListening, onCommand]);
+    }, [isListening, handleCommand]);
 
     return (
         <div className="text-center">
@@ -67,3 +80,4 @@ const VoiceCommand: React.FC<VoiceCommandProps> = ({ onCommand }) => {
 };
 
 export default VoiceCommand;
+
